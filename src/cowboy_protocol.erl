@@ -102,7 +102,7 @@ get_value(Key, Opts, Default) ->
 
 %% @private
 -spec init(barrel:ref(), inet:socket(), module(), opts()) -> ok.
-init(Ref, Socket, Transport, Opts) ->
+init(Ref, Transport, Socket, Opts) ->
 	Compress = get_value(compress, Opts, false),
 	MaxEmptyLines = get_value(max_empty_lines, Opts, 5),
 	MaxHeaderNameLength = get_value(max_header_name_length, Opts, 64),

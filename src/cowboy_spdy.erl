@@ -84,7 +84,7 @@
 
 %% @doc Start a SPDY protocol process.
 -spec start_link(any(), inet:socket(), module(), any()) -> {ok, pid()}.
-start_link(Ref, Socket, Transport, Opts) ->
+start_link(Ref, Transport, Socket, Opts) ->
 	proc_lib:start_link(?MODULE, init,
 		[self(), Ref, Socket, Transport, Opts]).
 
