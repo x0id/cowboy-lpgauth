@@ -37,7 +37,7 @@ groups() ->
 
 init_per_suite(Config) ->
 	application:start(crypto),
-	application:start(ranch),
+	application:start(barrel),
 	application:start(cowboy),
 	%% /tmp must be used as the parent directory for the virtualenv because
 	%% the directory names used in CT are so long that the interpreter path
@@ -57,7 +57,7 @@ init_per_suite(Config) ->
 end_per_suite(_Config) ->
 	os:cmd("deactivate"),
 	application:stop(cowboy),
-	application:stop(ranch),
+	application:stop(barrel),
 	application:stop(crypto),
 	ok.
 

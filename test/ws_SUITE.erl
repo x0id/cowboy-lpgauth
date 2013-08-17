@@ -70,13 +70,13 @@ groups() ->
 
 init_per_suite(Config) ->
 	application:start(crypto),
-	application:start(ranch),
+	application:start(barrel),
 	application:start(cowboy),
 	Config.
 
 end_per_suite(_Config) ->
 	application:stop(cowboy),
-	application:stop(ranch),
+	application:stop(barrel),
 	application:stop(crypto),
 	ok.
 
@@ -85,7 +85,7 @@ init_per_group(ws, Config) ->
 		{env, [{dispatch, init_dispatch()}]},
 		{compress, true}
 	]),
-	Port = ranch:get_port(ws),
+	{ok, Port} = barrel:get_port(ws),
 	[{port, Port}|Config].
 
 end_per_group(Listener, _Config) ->
@@ -618,7 +618,7 @@ ws_timeout_hibernate(Config) ->
 	ok.
 
 ws_timeout_cancel(Config) ->
-	%% Erlang messages to a socket should not cancel the timeout	
+	%% Erlang messages to a socket should not cancel the timeout
 	{port, Port} = lists:keyfind(port, 1, Config),
 	{ok, Socket} = gen_tcp:connect("localhost", Port,
 		[binary, {active, false}, {packet, raw}]),
@@ -645,7 +645,7 @@ ws_timeout_cancel(Config) ->
 	ok.
 
 ws_timeout_reset(Config) ->
-	%% Erlang messages across a socket should reset the timeout	
+	%% Erlang messages across a socket should reset the timeout
 	{port, Port} = lists:keyfind(port, 1, Config),
 	{ok, Socket} = gen_tcp:connect("localhost", Port,
 		[binary, {active, false}, {packet, raw}]),

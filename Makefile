@@ -10,9 +10,9 @@ PLT_APPS = crypto public_key ssl
 
 # Dependencies.
 
-DEPS = ranch
+DEPS = barrel 
 TEST_DEPS = ct_helper
-dep_ranch = https://github.com/extend/ranch.git 0.8.4
+dep_barrel = https://github.com/benoitc/barrel.git master
 dep_ct_helper = https://github.com/extend/ct_helper.git master
 
 # Standard targets.

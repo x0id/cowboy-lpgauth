@@ -191,7 +191,7 @@ groups() ->
 
 init_per_suite(Config) ->
 	application:start(crypto),
-	application:start(ranch),
+	application:start(barrel),
 	application:start(cowboy),
 	Dir = ?config(priv_dir, Config) ++ "/static",
 	ct_helper:create_static_dir(Dir),
@@ -201,23 +201,23 @@ end_per_suite(Config) ->
 	Dir = ?config(static_dir, Config),
 	ct_helper:delete_static_dir(Dir),
 	application:stop(cowboy),
-	application:stop(ranch),
+	application:stop(barrel),
 	application:stop(crypto),
 	ok.
 
 init_per_group(http, Config) ->
-	Transport = ranch_tcp,
+	Transport = barrel_tcp,
 	{ok, _} = cowboy:start_http(http, 100, [{port, 0}], [
 		{env, [{dispatch, init_dispatch(Config)}]},
 		{max_keepalive, 50},
 		{timeout, 500}
 	]),
-	Port = ranch:get_port(http),
+	{ok, Port} = barrel:get_port(http),
 	{ok, Client} = cowboy_client:init([]),
 	[{scheme, <<"http">>}, {port, Port}, {opts, []},
 		{transport, Transport}, {client, Client}|Config];
 init_per_group(https, Config) ->
-	Transport = ranch_ssl,
+	Transport = barrel_ssl,
 	{_, Cert, Key} = ct_helper:make_certs(),
 	Opts = [{cert, Cert}, {key, Key}],
 	application:start(asn1),
@@ -228,24 +228,24 @@ init_per_group(https, Config) ->
 		{max_keepalive, 50},
 		{timeout, 500}
 	]),
-	Port = ranch:get_port(https),
+	{ok, Port} = barrel:get_port(https),
 	{ok, Client} = cowboy_client:init(Opts),
 	[{scheme, <<"https">>}, {port, Port}, {opts, Opts},
 		{transport, Transport}, {client, Client}|Config];
 init_per_group(http_compress, Config) ->
-	Transport = ranch_tcp,
+	Transport = barrel_tcp,
 	{ok, _} = cowboy:start_http(http_compress, 100, [{port, 0}], [
 		{compress, true},
 		{env, [{dispatch, init_dispatch(Config)}]},
 		{max_keepalive, 50},
 		{timeout, 500}
 	]),
-	Port = ranch:get_port(http_compress),
+	{ok, Port} = barrel:get_port(http_compress),
 	{ok, Client} = cowboy_client:init([]),
 	[{scheme, <<"http">>}, {port, Port}, {opts, []},
 		{transport, Transport}, {client, Client}|Config];
 init_per_group(https_compress, Config) ->
-	Transport = ranch_ssl,
+	Transport = barrel_ssl,
 	{_, Cert, Key} = ct_helper:make_certs(),
 	Opts = [{cert, Cert}, {key, Key}],
 	application:start(asn1),
@@ -257,54 +257,54 @@ init_per_group(https_compress, Config) ->
 		{max_keepalive, 50},
 		{timeout, 500}
 	]),
-	Port = ranch:get_port(https_compress),
+	{ok, Port} = barrel:get_port(https_compress),
 	{ok, Client} = cowboy_client:init(Opts),
 	[{scheme, <<"https">>}, {port, Port}, {opts, Opts},
 		{transport, Transport}, {client, Client}|Config];
 init_per_group(onrequest, Config) ->
-	Transport = ranch_tcp,
+	Transport = barrel_tcp,
 	{ok, _} = cowboy:start_http(onrequest, 100, [{port, 0}], [
 		{env, [{dispatch, init_dispatch(Config)}]},
 		{max_keepalive, 50},
 		{onrequest, fun onrequest_hook/1},
 		{timeout, 500}
 	]),
-	Port = ranch:get_port(onrequest),
+	{ok, Port} = barrel:get_port(onrequest),
 	{ok, Client} = cowboy_client:init([]),
 	[{scheme, <<"http">>}, {port, Port}, {opts, []},
 		{transport, Transport}, {client, Client}|Config];
 init_per_group(onresponse, Config) ->
-	Transport = ranch_tcp,
+	Transport = barrel_tcp,
 	{ok, _} = cowboy:start_http(onresponse, 100, [{port, 0}], [
 		{env, [{dispatch, init_dispatch(Config)}]},
 		{max_keepalive, 50},
 		{onresponse, fun onresponse_hook/4},
 		{timeout, 500}
 	]),
-	Port = ranch:get_port(onresponse),
+	{ok, Port} = barrel:get_port(onresponse),
 	{ok, Client} = cowboy_client:init([]),
 	[{scheme, <<"http">>}, {port, Port}, {opts, []},
 		{transport, Transport}, {client, Client}|Config];
 init_per_group(onresponse_capitalize, Config) ->
-	Transport = ranch_tcp,
+	Transport = barrel_tcp,
 	{ok, _} = cowboy:start_http(onresponse_capitalize, 100, [{port, 0}], [
 		{env, [{dispatch, init_dispatch(Config)}]},
 		{max_keepalive, 50},
 		{onresponse, fun onresponse_capitalize_hook/4},
 		{timeout, 500}
 	]),
-	Port = ranch:get_port(onresponse_capitalize),
+	{ok, Port} = barrel:get_port(onresponse_capitalize),
 	{ok, Client} = cowboy_client:init([]),
 	[{scheme, <<"http">>}, {port, Port}, {opts, []},
 		{transport, Transport}, {client, Client}|Config];
 init_per_group(set_env, Config) ->
-	Transport = ranch_tcp,
+	Transport = barrel_tcp,
 	{ok, _} = cowboy:start_http(set_env, 100, [{port, 0}], [
 		{env, [{dispatch, []}]},
 		{max_keepalive, 50},
 		{timeout, 500}
 	]),
-	Port = ranch:get_port(set_env),
+	{ok, Port} = barrel:get_port(set_env),
 	{ok, Client} = cowboy_client:init([]),
 	[{scheme, <<"http">>}, {port, Port}, {opts, []},
 		{transport, Transport}, {client, Client}|Config].
@@ -644,7 +644,7 @@ http10_chunkless(Config) ->
 http10_hostless(Config) ->
 	Port10 = ?config(port, Config) + 10,
 	Name = list_to_atom("http10_hostless_" ++ integer_to_list(Port10)),
-	ranch:start_listener(Name, 5,
+	barrel:start_listener(Name, 5,
 		?config(transport, Config), ?config(opts, Config) ++ [{port, Port10}],
 		cowboy_protocol, [
 			{env, [{dispatch, cowboy_router:compile([

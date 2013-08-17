@@ -40,7 +40,7 @@ groups() ->
 
 init_per_suite(Config) ->
 	application:start(crypto),
-	application:start(ranch),
+	application:start(barrel),
 	application:start(cowboy),
 	application:start(asn1),
 	application:start(public_key),
@@ -56,7 +56,7 @@ end_per_suite(Config) ->
 	application:stop(public_key),
 	application:stop(asn1),
 	application:stop(cowboy),
-	application:stop(ranch),
+	application:stop(barrel),
 	application:stop(crypto),
 	ok.
 
@@ -66,7 +66,7 @@ init_per_group(Name, Config) ->
 	{ok, _} = cowboy:start_spdy(Name, 100, Opts ++ [{port, 0}], [
 		{env, [{dispatch, init_dispatch(Config)}]}
 	]),
-	Port = ranch:get_port(Name),
+	{ok, Port} = barrel:get_port(Name),
 	[{port, Port}|Config].
 
 end_per_group(Name, _) ->
