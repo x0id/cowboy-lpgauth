@@ -99,7 +99,7 @@ get_value(Key, Opts, Default) ->
 	end.
 
 %% @private
--spec init(pid(), ranch:ref(), inet:socket(), module(), opts()) -> ok.
+-spec init(pid(), barrel:ref(), inet:socket(), module(), opts()) -> ok.
 init(Parent, Ref, Socket, Transport, Opts) ->
 	process_flag(trap_exit, true),
 	ok = proc_lib:init_ack(Parent, {ok, self()}),
@@ -113,7 +113,7 @@ init(Parent, Ref, Socket, Transport, Opts) ->
 	_ = zlib:deflateSetDictionary(Zdef, ?ZDICT),
 	Zinf = zlib:open(),
 	ok = zlib:inflateInit(Zinf),
-	ok = ranch:accept_ack(Ref),
+	ok = barrel:accept_ack(Ref),
 	loop(#state{parent=Parent, socket=Socket, transport=Transport,
 		middlewares=Middlewares, env=Env, onrequest=OnRequest,
 		onresponse=OnResponse, peer=Peer, zdef=Zdef, zinf=Zinf}).

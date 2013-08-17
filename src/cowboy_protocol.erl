@@ -49,10 +49,9 @@
 -module(cowboy_protocol).
 
 %% API.
--export([start_link/4]).
+-export([init/4]).
 
 %% Internal.
--export([init/4]).
 -export([parse_request/3]).
 -export([parse_host/2]).
 -export([resume/6]).
@@ -91,13 +90,6 @@
 }).
 
 %% API.
-
-%% @doc Start an HTTP protocol process.
--spec start_link(ranch:ref(), inet:socket(), module(), opts()) -> {ok, pid()}.
-start_link(Ref, Socket, Transport, Opts) ->
-	Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
-	{ok, Pid}.
-
 %% Internal.
 
 %% @doc Faster alternative to proplists:get_value/3.
@@ -109,7 +101,7 @@ get_value(Key, Opts, Default) ->
 	end.
 
 %% @private
--spec init(ranch:ref(), inet:socket(), module(), opts()) -> ok.
+-spec init(barrel:ref(), inet:socket(), module(), opts()) -> ok.
 init(Ref, Socket, Transport, Opts) ->
 	Compress = get_value(compress, Opts, false),
 	MaxEmptyLines = get_value(max_empty_lines, Opts, 5),
@@ -123,7 +115,6 @@ init(Ref, Socket, Transport, Opts) ->
 	OnRequest = get_value(onrequest, Opts, undefined),
 	OnResponse = get_value(onresponse, Opts, undefined),
 	Timeout = get_value(timeout, Opts, 5000),
-	ok = ranch:accept_ack(Ref),
 	wait_request(<<>>, #state{socket=Socket, transport=Transport,
 		middlewares=Middlewares, compress=Compress, env=Env,
 		max_empty_lines=MaxEmptyLines, max_keepalive=MaxKeepalive,

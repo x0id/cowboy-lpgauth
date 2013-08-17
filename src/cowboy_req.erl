@@ -1494,28 +1494,28 @@ status(B) when is_binary(B) -> B.
 
 url_test() ->
 	{undefined, _} =
-		url(#http_req{transport=ranch_tcp, host= <<>>, port= undefined,
+		url(#http_req{transport=barrel_tcp, host= <<>>, port= undefined,
 			path= <<>>, qs= <<>>, pid=self()}),
 	{<<"http://localhost/path">>, _ } =
-		url(#http_req{transport=ranch_tcp, host= <<"localhost">>, port=80,
+		url(#http_req{transport=barrel_tcp, host= <<"localhost">>, port=80,
 			path= <<"/path">>, qs= <<>>, pid=self()}),
 	{<<"http://localhost:443/path">>, _} =
-		url(#http_req{transport=ranch_tcp, host= <<"localhost">>, port=443,
+		url(#http_req{transport=barrel_tcp, host= <<"localhost">>, port=443,
 			path= <<"/path">>, qs= <<>>, pid=self()}),
 	{<<"http://localhost:8080/path">>, _} =
-		url(#http_req{transport=ranch_tcp, host= <<"localhost">>, port=8080,
+		url(#http_req{transport=barrel_tcp, host= <<"localhost">>, port=8080,
 			path= <<"/path">>, qs= <<>>, pid=self()}),
 	{<<"http://localhost:8080/path?dummy=2785">>, _} =
-		url(#http_req{transport=ranch_tcp, host= <<"localhost">>, port=8080,
+		url(#http_req{transport=barrel_tcp, host= <<"localhost">>, port=8080,
 			path= <<"/path">>, qs= <<"dummy=2785">>, pid=self()}),
 	{<<"https://localhost/path">>, _} =
-		url(#http_req{transport=ranch_ssl, host= <<"localhost">>, port=443,
+		url(#http_req{transport=barrel_ssl, host= <<"localhost">>, port=443,
 			path= <<"/path">>, qs= <<>>, pid=self()}),
 	{<<"https://localhost:8443/path">>, _} =
-		url(#http_req{transport=ranch_ssl, host= <<"localhost">>, port=8443,
+		url(#http_req{transport=barrel_ssl, host= <<"localhost">>, port=8443,
 			path= <<"/path">>, qs= <<>>, pid=self()}),
 	{<<"https://localhost:8443/path?dummy=2785">>, _} =
-		url(#http_req{transport=ranch_ssl, host= <<"localhost">>, port=8443,
+		url(#http_req{transport=barrel_ssl, host= <<"localhost">>, port=8443,
 			path= <<"/path">>, qs= <<"dummy=2785">>, pid=self()}),
 	ok.
 

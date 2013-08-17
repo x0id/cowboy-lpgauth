@@ -38,23 +38,23 @@
 -export_type([onresponse_fun/0]).
 
 %% @doc Start an HTTP listener.
--spec start_http(ranch:ref(), non_neg_integer(), ranch_tcp:opts(),
+-spec start_http(barrel:ref(), non_neg_integer(), barrel_tcp:opts(),
 	cowboy_protocol:opts()) -> {ok, pid()} | {error, any()}.
 start_http(Ref, NbAcceptors, TransOpts, ProtoOpts)
 		when is_integer(NbAcceptors), NbAcceptors > 0 ->
-	ranch:start_listener(Ref, NbAcceptors,
-		ranch_tcp, TransOpts, cowboy_protocol, ProtoOpts).
+	barrel:start_listener(Ref, NbAcceptors,
+		barrel_tcp, TransOpts, cowboy_protocol, ProtoOpts).
 
 %% @doc Start an HTTPS listener.
--spec start_https(ranch:ref(), non_neg_integer(), ranch_ssl:opts(),
+-spec start_https(barrel:ref(), non_neg_integer(), barrel_ssl:opts(),
 	cowboy_protocol:opts()) -> {ok, pid()} | {error, any()}.
 start_https(Ref, NbAcceptors, TransOpts, ProtoOpts)
 		when is_integer(NbAcceptors), NbAcceptors > 0 ->
-	ranch:start_listener(Ref, NbAcceptors,
-		ranch_ssl, TransOpts, cowboy_protocol, ProtoOpts).
+	barrel:start_listener(Ref, NbAcceptors,
+		barrel_ssl, TransOpts, cowboy_protocol, ProtoOpts).
 
 %% @doc Start a SPDY listener.
--spec start_spdy(ranch:ref(), non_neg_integer(), ranch_ssl:opts(),
+-spec start_spdy(barrel:ref(), non_neg_integer(), barrel_ssl:opts(),
 	cowboy_spdy:opts()) -> {ok, pid()} | {error, any()}.
 start_spdy(Ref, NbAcceptors, TransOpts, ProtoOpts)
 		when is_integer(NbAcceptors), NbAcceptors > 0 ->
@@ -63,23 +63,23 @@ start_spdy(Ref, NbAcceptors, TransOpts, ProtoOpts)
 		{next_protocols_advertised,
 			[<<"spdy/3">>, <<"http/1.1">>, <<"http/1.0">>]}
 	|TransOpts],
-	ranch:start_listener(Ref, NbAcceptors,
-		ranch_ssl, TransOpts2, cowboy_spdy, ProtoOpts).
+	barrel:start_listener(Ref, NbAcceptors,
+		barrel_ssl, TransOpts2, cowboy_spdy, ProtoOpts).
 
 %% @doc Stop a listener.
--spec stop_listener(ranch:ref()) -> ok.
+-spec stop_listener(barrel:ref()) -> ok.
 stop_listener(Ref) ->
-	ranch:stop_listener(Ref).
+	barrel:stop_listener(Ref).
 
 %% @doc Convenience function for setting an environment value.
 %%
 %% Allows you to update live an environment value used by middlewares.
 %% This function is primarily intended to simplify updating the dispatch
 %% list used for routing.
--spec set_env(ranch:ref(), atom(), any()) -> ok.
+-spec set_env(barrel:ref(), atom(), any()) -> ok.
 set_env(Ref, Name, Value) ->
-	Opts = ranch:get_protocol_options(Ref),
+	{Handler, Opts} = barrel:get_protocol_conf(Ref),
 	{_, Env} = lists:keyfind(env, 1, Opts),
 	Env2 = [{Name, Value}|lists:keydelete(Name, 1, Env)],
 	Opts2 = lists:keyreplace(env, 1, Opts, {env, Env2}),
-	ok = ranch:set_protocol_options(Ref, Opts2).
+	ok = barrel:set_protocol_conf(Ref, Handler, Opts2).
