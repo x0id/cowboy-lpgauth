@@ -10,9 +10,9 @@ PLT_APPS = crypto public_key ssl
 
 # Dependencies.
 
-DEPS = barrel 
+DEPS = barrel
 TEST_DEPS = ct_helper
-dep_barrel = https://github.com/benoitc/barrel.git master
+dep_barrel = https://github.com/lpgauth/barrel.git adgear
 dep_ct_helper = https://github.com/extend/ct_helper.git master
 
 # Standard targets.
