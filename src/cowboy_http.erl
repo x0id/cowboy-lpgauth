@@ -1051,22 +1051,22 @@ cookie_to_iodata(Name, Value, Opts) ->
 %% @doc Decode a URL encoded binary.
 -spec urldecode(binary()) -> binary().
 urldecode(Bin) when is_binary(Bin) ->
-	quoted:from_url(Bin).
+	rtb_lib_nif:quoted_from_url(Bin).
 
 %% @doc Decode a URL encoded binary.
 -spec urldecode(binary(), term()) -> binary().
 urldecode(Bin, Opts) when is_binary(Bin) ->
-	quoted:from_url(Bin, Opts).
+	rtb_lib_nif:quoted_from_url(Bin, Opts).
 
 %% @doc URL encode a string binary.
 -spec urlencode(binary()) -> binary().
 urlencode(Bin) ->
-	quoted:to_url(Bin).
+	rtb_lib_nif:quoted_to_url(Bin).
 
 %% @doc URL encode a string binary.
 -spec urlencode(binary(), term()) -> binary().
 urlencode(Bin, Opts) ->
-	quoted:to_url(Bin, Opts).
+	rtb_lib_nif:quoted_to_url(Bin, Opts).
 
 -spec x_www_form_urlencoded(binary()) -> list({binary(), binary() | true}).
 x_www_form_urlencoded(<<>>) ->
