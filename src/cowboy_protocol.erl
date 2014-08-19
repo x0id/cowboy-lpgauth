@@ -20,7 +20,7 @@
 
 %% Internal.
 -export([init/4]).
--export([parse_request/3]).
+-export([safe_parse_request/3]).
 -export([resume/6]).
 
 -type opts() :: [{compress, boolean()}
@@ -131,10 +131,18 @@ wait_request(Buffer, State=#state{socket=Socket, transport=Transport,
 		until=Until}, ReqEmpty) ->
 	case recv(Socket, Transport, Until) of
 		{ok, Data} ->
-			parse_request(<< Buffer/binary, Data/binary >>, State, ReqEmpty);
+			safe_parse_request(<< Buffer/binary, Data/binary >>, State, ReqEmpty);
 		{error, _} ->
 			terminate(State)
 	end.
+
+-spec safe_parse_request(binary(), #state{}, non_neg_integer()) -> ok.
+safe_parse_request(Buffer, State, ReqEmpty) ->
+    try parse_request(Buffer, State, ReqEmpty)
+    catch
+        _E:_R ->
+            error_terminate(400, State)
+    end.
 
 -spec parse_request(binary(), #state{}, non_neg_integer()) -> ok.
 %% Empty lines must be using \r\n.
@@ -477,7 +485,7 @@ next_request(Req, State=#state{req_keepalive=Keepalive, timeout=Timeout},
 			%% Flush the resp_sent message before moving on.
 			if HandlerRes =:= ok, Buffer =/= close ->
 					receive {cowboy_req, resp_sent} -> ok after 0 -> ok end,
-					?MODULE:parse_request(Buffer,
+					?MODULE:safe_parse_request(Buffer,
 						State#state{req_keepalive=Keepalive + 1,
 						until=until(Timeout)}, 0);
 				true ->
