@@ -137,10 +137,13 @@ wait_request(Buffer, State=#state{socket=Socket, transport=Transport,
 	end.
 
 -spec safe_parse_request(binary(), #state{}, non_neg_integer()) -> ok.
-safe_parse_request(Buffer, State, ReqEmpty) ->
+safe_parse_request(Buffer, State=#state{socket=Socket}, ReqEmpty) ->
     try parse_request(Buffer, State, ReqEmpty)
     catch
         _E:_R ->
+            {ok, {Address, Port}} = inet:peername(Socket),
+            Ip = inet:ntoa(Address),
+            error_logger:error_msg("Cowboy received an invalid request from: ~s:~p", [Ip, Port]),
             error_terminate(400, State)
     end.
 
