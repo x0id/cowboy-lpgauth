@@ -140,12 +140,11 @@ wait_request(Buffer, State=#state{socket=Socket, transport=Transport,
 safe_parse_request(Buffer, State=#state{socket=Socket}, ReqEmpty) ->
     try parse_request(Buffer, State, ReqEmpty)
     catch
-        E:R ->
+        _:_ ->
             case inet:peername(Socket) of
                 {ok, {Address, Port}} ->
                     Ip = inet:ntoa(Address),
-                    error_logger:error_msg("Cowboy received an invalid request from: ~s:~p", [Ip, Port]),
-                    error_logger:error_msg("DEBUG: ~p:~p~n~p~nbuffer: ~p, req_empty: ~p", [E, R, erlang:get_stacktrace(), Buffer, ReqEmpty]);
+                    error_logger:error_msg("Cowboy received an invalid request from: ~s:~p", [Ip, Port]);
                 {error, Reason} ->
                     error_logger:error_msg("Cowboy received an invalid request, socket error: ~p", [Reason])
             end,
