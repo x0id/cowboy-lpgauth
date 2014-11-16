@@ -527,10 +527,16 @@ body(Req=#http_req{body_state=waiting}, Opts) ->
 					body(Req2#http_req{body_state={stream, 0,
 						fun cow_http_te:stream_chunked/2, {0, 0}, CFun}}, Opts);
 				{ok, [<<"identity">>], Req2} ->
+					ReadLen = case lists:keyfind(read_length, 1, Opts) of
+						false -> 1000000;
+						{_, ReadLen0} -> ReadLen0
+					end,
 					{Len, Req3} = body_length(Req2),
 					case Len of
 						0 ->
 							{ok, <<>>, Req3#http_req{body_state=done}};
+						Len when Len > ReadLen ->
+							{error, badlength};
 						_ ->
 							body(Req3#http_req{body_state={stream, Len,
 								fun cow_http_te:stream_identity/2, {0, Len},
@@ -744,10 +750,10 @@ stream_multipart(Req=#http_req{multipart={Boundary, Buffer}}, _) ->
 %% Response API.
 
 %% The cookie name cannot contain any of the following characters:
-%%   =,;\s\t\r\n\013\014
+%%	 =,;\s\t\r\n\013\014
 %%
 %% The cookie value cannot contain any of the following characters:
-%%   ,; \t\r\n\013\014
+%%	 ,; \t\r\n\013\014
 -spec set_resp_cookie(iodata(), iodata(), cookie_opts(), Req)
 	-> Req when Req::req().
 set_resp_cookie(Name, Value, Opts, Req) ->
