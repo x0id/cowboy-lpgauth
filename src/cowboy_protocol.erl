@@ -54,8 +54,8 @@
 	max_headers :: non_neg_integer(),
 	timeout :: timeout(),
 	until :: non_neg_integer() | infinity,
-        req1 = undefined,
-        req2 = undefined
+        previous_recv = [],
+        current_recv = []
 }).
 
 -include_lib("cowlib/include/cow_inline.hrl").
@@ -114,26 +114,32 @@ until(Timeout) ->
 %% right after the header parsing is finished and the code becomes
 %% more interesting past that point.
 
--spec recv(inet:socket(), module(), non_neg_integer() | infinity)
-	-> {ok, binary()} | {error, closed | timeout | atom()}.
-recv(Socket, Transport, infinity) ->
-	Transport:recv(Socket, 0, infinity);
-recv(Socket, Transport, Until) ->
+%% -spec recv(inet:socket(), module(), non_neg_integer() | infinity)
+%% 	-> {ok, binary()} | {error, closed | timeout | atom()}.
+recv(Socket, Transport, infinity, State = #state{current_recv = Curr}) ->
+	case Transport:recv(Socket, 0, infinity) of
+            {ok, Data} -> {ok, Data, State#state{current_recv = [Data | Curr]}};
+            Err -> Err
+        end;
+recv(Socket, Transport, Until, State = #state{current_recv = Curr}) ->
 	{Me, S, Mi} = os:timestamp(),
 	Now = Me * 1000000000 + S * 1000 + Mi div 1000,
 	Timeout = Until - Now,
 	if	Timeout < 0 ->
 			{error, timeout};
 		true ->
-			Transport:recv(Socket, 0, Timeout)
+			case Transport:recv(Socket, 0, Timeout) of
+                            {ok, Data} -> {ok, Data, State#state{current_recv = [Data | Curr]}};
+                            Err -> Err
+                        end
 	end.
 
 -spec wait_request(binary(), #state{}, non_neg_integer()) -> ok.
 wait_request(Buffer, State=#state{socket=Socket, transport=Transport,
 		until=Until}, ReqEmpty) ->
-	case recv(Socket, Transport, Until) of
-		{ok, Data} ->
-			parse_request(<< Buffer/binary, Data/binary >>, State, ReqEmpty);
+	case recv(Socket, Transport, Until, State) of
+		{ok, Data, State2} ->
+			parse_request(<< Buffer/binary, Data/binary >>, State2, ReqEmpty);
 		{error, _} ->
 			terminate(State)
 	end.
@@ -229,10 +235,10 @@ wait_header(_, State=#state{max_headers=MaxHeaders}, _, _, _, _, Headers)
 	error_terminate(400, State);
 wait_header(Buffer, State=#state{socket=Socket, transport=Transport,
 		until=Until}, M, P, Q, V, H) ->
-	case recv(Socket, Transport, Until) of
-		{ok, Data} ->
+	case recv(Socket, Transport, Until, State) of
+		{ok, Data, State2} ->
 			parse_header(<< Buffer/binary, Data/binary >>,
-				State, M, P, Q, V, H);
+				State2, M, P, Q, V, H);
 		{error, timeout} ->
 			error_terminate(408, State);
 		{error, _} ->
@@ -277,10 +283,10 @@ parse_hd_name_ws(<< C, Rest/bits >>, S, M, P, Q, V, H, Name) ->
 wait_hd_before_value(Buffer, State=#state{
 		socket=Socket, transport=Transport, until=Until},
 		M, P, Q, V, H, N) ->
-	case recv(Socket, Transport, Until) of
-		{ok, Data} ->
+	case recv(Socket, Transport, Until, State) of
+		{ok, Data, State2} ->
 			parse_hd_before_value(<< Buffer/binary, Data/binary >>,
-				State, M, P, Q, V, H, N);
+				State2, M, P, Q, V, H, N);
 		{error, timeout} ->
 			error_terminate(408, State);
 		{error, _} ->
@@ -309,9 +315,9 @@ parse_hd_before_value(Buffer, State=#state{
 wait_hd_value(_, State=#state{
 		socket=Socket, transport=Transport, until=Until},
 		M, P, Q, V, H, N, SoFar) ->
-	case recv(Socket, Transport, Until) of
-		{ok, Data} ->
-			parse_hd_value(Data, State, M, P, Q, V, H, N, SoFar);
+	case recv(Socket, Transport, Until, State) of
+		{ok, Data, State2} ->
+			parse_hd_value(Data, State2, M, P, Q, V, H, N, SoFar);
 		{error, timeout} ->
 			error_terminate(408, State);
 		{error, _} ->
@@ -324,11 +330,11 @@ wait_hd_value(_, State=#state{
 wait_hd_value_nl(_, State=#state{
 		socket=Socket, transport=Transport, until=Until},
 		M, P, Q, V, Headers, Name, SoFar) ->
-	case recv(Socket, Transport, Until) of
-		{ok, << C, Data/bits >>} when C =:= $\s; C =:= $\t  ->
-			parse_hd_value(Data, State, M, P, Q, V, Headers, Name, SoFar);
-		{ok, Data} ->
-			parse_header(Data, State, M, P, Q, V, [{Name, SoFar}|Headers]);
+	case recv(Socket, Transport, Until, State) of
+		{ok, << C, Data/bits >>, State2} when C =:= $\s; C =:= $\t  ->
+			parse_hd_value(Data, State2, M, P, Q, V, Headers, Name, SoFar);
+		{ok, Data, State2} ->
+			parse_header(Data, State2, M, P, Q, V, [{Name, SoFar}|Headers]);
 		{error, timeout} ->
 			error_terminate(408, State);
 		{error, _} ->
@@ -462,7 +468,7 @@ resume(State, Env, Tail, Module, Function, Args) ->
 	end.
 
 -spec next_request(cowboy_req:req(), #state{}, any()) -> ok.
-next_request(Req, State=#state{req_keepalive=Keepalive, timeout=Timeout},
+next_request(Req, State=#state{req_keepalive=Keepalive, timeout=Timeout, current_recv = Cur},
 		HandlerRes) ->
 	cowboy_req:ensure_response(Req, 204),
 	%% If we are going to close the connection,
@@ -472,16 +478,21 @@ next_request(Req, State=#state{req_keepalive=Keepalive, timeout=Timeout},
 			terminate(State);
 		_ ->
 			%% Skip the body if it is reasonably sized. Close otherwise.
-			{Req2, Buffer} = case cowboy_req:body(Req) of
-				{ok, _, ReqN} -> {ReqN, cowboy_req:get(buffer, ReqN)};
-				_ -> {undefined, close}
-			end,
+                Buffer = case cowboy_req:body(Req) of
+                             {ok, _, Req2} -> cowboy_req:get(buffer, Req2);
+                             _ -> close
+                         end,
+
+			%% {Req2, Buffer} = case cowboy_req:body(Req) of
+			%% 	{ok, _, ReqN} -> {ReqN, cowboy_req:get(buffer, ReqN)};
+			%% 	_ -> {undefined, close}
+			%% end,
 			%% Flush the resp_sent message before moving on.
 			if HandlerRes =:= ok, Buffer =/= close ->
 					receive {cowboy_req, resp_sent} -> ok after 0 -> ok end,
 					?MODULE:parse_request(Buffer,
 						State#state{req_keepalive=Keepalive + 1,
-						until=until(Timeout), req1 = Req, req2 = Req2}, 0);
+						until=until(Timeout), previous_recv = Cur, current_recv = []}, 0);
 				true ->
 					terminate(State)
 			end
