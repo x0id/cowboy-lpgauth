@@ -472,9 +472,9 @@ next_request(Req, State=#state{req_keepalive=Keepalive, timeout=Timeout},
 			terminate(State);
 		_ ->
 			%% Skip the body if it is reasonably sized. Close otherwise.
-			Buffer = case cowboy_req:body(Req) of
-				{ok, _, Req2} -> cowboy_req:get(buffer, Req2);
-				_ -> close
+			{Req2, Buffer} = case cowboy_req:body(Req) of
+				{ok, _, ReqN} -> {ReqN, cowboy_req:get(buffer, ReqN)};
+				_ -> {undefined, close}
 			end,
 			%% Flush the resp_sent message before moving on.
 			if HandlerRes =:= ok, Buffer =/= close ->
