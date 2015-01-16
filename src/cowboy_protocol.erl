@@ -54,7 +54,8 @@
 	max_headers :: non_neg_integer(),
 	timeout :: timeout(),
 	until :: non_neg_integer() | infinity,
-        peername
+        peername,
+        buffer_was = undefined
 }).
 
 -include_lib("cowlib/include/cow_inline.hrl").
@@ -484,7 +485,7 @@ next_request(Req, State=#state{req_keepalive=Keepalive, timeout=Timeout},
 					receive {cowboy_req, resp_sent} -> ok after 0 -> ok end,
 					?MODULE:parse_request(Buffer,
 						State#state{req_keepalive=Keepalive + 1,
-						until=until(Timeout)}, 0);
+						until=until(Timeout), buffer_was = Buffer}, 0);
 				true ->
 					terminate(State)
 			end
