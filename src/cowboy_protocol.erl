@@ -55,7 +55,8 @@
 	timeout :: timeout(),
 	until :: non_neg_integer() | infinity,
         peername,
-        buffer_was = undefined
+        buffer_was = undefined,
+        body_was = undefined
 }).
 
 -include_lib("cowlib/include/cow_inline.hrl").
@@ -476,16 +477,16 @@ next_request(Req, State=#state{req_keepalive=Keepalive, timeout=Timeout},
 			terminate(State);
 		_ ->
 			%% Skip the body if it is reasonably sized. Close otherwise.
-			Buffer = case cowboy_req:body(Req) of
-				{ok, _, Req2} -> cowboy_req:get(buffer, Req2);
-				_ -> close
+			{BodyWas, Buffer} = case cowboy_req:body(Req) of
+				{ok, B, Req2} -> {B, cowboy_req:get(buffer, Req2)};
+				_ -> {undefined, close}
 			end,
 			%% Flush the resp_sent message before moving on.
 			if HandlerRes =:= ok, Buffer =/= close ->
 					receive {cowboy_req, resp_sent} -> ok after 0 -> ok end,
 					?MODULE:parse_request(Buffer,
 						State#state{req_keepalive=Keepalive + 1,
-						until=until(Timeout), buffer_was = Buffer}, 0);
+						until=until(Timeout), buffer_was = Buffer, body_was = BodyWas}, 0);
 				true ->
 					terminate(State)
 			end
