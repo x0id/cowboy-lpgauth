@@ -54,9 +54,8 @@
 	max_headers :: non_neg_integer(),
 	timeout :: timeout(),
 	until :: non_neg_integer() | infinity,
-        peername,
-        buffer_was = undefined,
-        body_was = undefined
+        req1 = undefined,
+        req2 = undefined
 }).
 
 -include_lib("cowlib/include/cow_inline.hrl").
@@ -91,10 +90,6 @@ init(Ref, Socket, Transport, Opts) ->
 	OnRequest = get_value(onrequest, Opts, undefined),
 	OnResponse = get_value(onresponse, Opts, undefined),
 	Timeout = get_value(timeout, Opts, 5000),
-        PeerName = case inet:peername(Socket) of
-                       {ok, P} -> P;
-                       _ -> undefined
-                   end,
 	ok = ranch:accept_ack(Ref),
 	wait_request(<<>>, #state{socket=Socket, transport=Transport,
 		middlewares=Middlewares, compress=Compress, env=Env,
@@ -103,7 +98,7 @@ init(Ref, Socket, Transport, Opts) ->
 		max_header_name_length=MaxHeaderNameLength,
 		max_header_value_length=MaxHeaderValueLength, max_headers=MaxHeaders,
 		onrequest=OnRequest, onresponse=OnResponse,
-		timeout=Timeout, until=until(Timeout), peername=PeerName}, 0).
+		timeout=Timeout, until=until(Timeout)}, 0).
 
 -spec until(timeout()) -> non_neg_integer() | infinity.
 until(infinity) ->
@@ -477,16 +472,16 @@ next_request(Req, State=#state{req_keepalive=Keepalive, timeout=Timeout},
 			terminate(State);
 		_ ->
 			%% Skip the body if it is reasonably sized. Close otherwise.
-			{BodyWas, Buffer} = case cowboy_req:body(Req) of
-				{ok, B, Req2} -> {B, cowboy_req:get(buffer, Req2)};
-				_ -> {undefined, close}
+			Buffer = case cowboy_req:body(Req) of
+				{ok, _, Req2} -> cowboy_req:get(buffer, Req2);
+				_ -> close
 			end,
 			%% Flush the resp_sent message before moving on.
 			if HandlerRes =:= ok, Buffer =/= close ->
 					receive {cowboy_req, resp_sent} -> ok after 0 -> ok end,
 					?MODULE:parse_request(Buffer,
 						State#state{req_keepalive=Keepalive + 1,
-						until=until(Timeout), buffer_was = Buffer, body_was = BodyWas}, 0);
+						until=until(Timeout), req1 = Req, req2 = Req2}, 0);
 				true ->
 					terminate(State)
 			end
