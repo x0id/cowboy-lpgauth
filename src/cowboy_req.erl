@@ -429,9 +429,7 @@ cookie(Name, Req=#http_req{cookies=undefined}, Default) when is_binary(Name) ->
 		{ok, undefined, Req2} ->
 			{Default, Req2#http_req{cookies=[]}};
 		{ok, Cookies, Req2} ->
-			cookie(Name, Req2#http_req{cookies=Cookies}, Default);
-		{error, badarg} ->
-			{Default, Req#http_req{cookies=[]}}
+			cookie(Name, Req2#http_req{cookies=Cookies}, Default)
 	end;
 cookie(Name, Req, Default) ->
 	case lists:keyfind(Name, 1, Req#http_req.cookies) of
