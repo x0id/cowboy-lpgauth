@@ -42,11 +42,11 @@ capitalize_token(<< C, Rest/bits >>, false, Acc) ->
 
 -spec to_lower(B) -> B when B::binary().
 to_lower(B) ->
-	<< << (char_to_lower(C)) >> || << C >> <= B >>.
+	erl_string_encoders:to_lower(B).
 
 -spec to_upper(B) -> B when B::binary().
 to_upper(B) ->
-	<< << (char_to_upper(C)) >> || << C >> <= B >>.
+	erl_string_encoders:to_upper(B).
 
 -spec char_to_lower(char()) -> char().
 char_to_lower($A) -> $a;
