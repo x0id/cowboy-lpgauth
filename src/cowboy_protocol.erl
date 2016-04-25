@@ -131,6 +131,7 @@ wait_request(Buffer, State=#state{socket=Socket, transport=Transport,
 		until=Until}, ReqEmpty) ->
 	case recv(Socket, Transport, Until) of
 		{ok, Data} ->
+			luger:warning("cowboy_protocol", "parse_request: ~p", [<< Buffer/binary, Data/binary >>]),
 			parse_request(<< Buffer/binary, Data/binary >>, State, ReqEmpty);
 		{error, _} ->
 			terminate(State)
@@ -144,6 +145,7 @@ parse_request(<< $\n, _/binary >>, State, _) ->
 %% reading from the socket and eventually crashing.
 parse_request(Buffer, State=#state{max_request_line_length=MaxLength,
 		max_empty_lines=MaxEmpty}, ReqEmpty) ->
+
 	case match_eol(Buffer, 0) of
 		nomatch when byte_size(Buffer) > MaxLength ->
 			error_terminate(414, State);
@@ -167,7 +169,7 @@ match_eol(_, _) ->
 
 parse_method(<< C, Rest/bits >>, State, SoFar) ->
 	case C of
-		$\r ->
+		$\r -> 
 			luger:warning("cowboy_protocol", "parse_method: ~p", [SoFar]),
 			error_terminate(400, State);
 		$\s -> parse_uri(Rest, State, SoFar);
