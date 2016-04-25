@@ -167,7 +167,9 @@ match_eol(_, _) ->
 
 parse_method(<< C, Rest/bits >>, State, SoFar) ->
 	case C of
-		$\r -> error_terminate(400, State);
+		$\r ->
+			luger:warning("cowboy_protocol", "parse_method: ~p", [SoFar]),
+			error_terminate(400, State);
 		$\s -> parse_uri(Rest, State, SoFar);
 		_ -> parse_method(Rest, State, << SoFar/binary, C >>)
 	end.
