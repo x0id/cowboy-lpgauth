@@ -131,7 +131,8 @@ wait_request(Buffer, State=#state{socket=Socket, transport=Transport,
 		until=Until}, ReqEmpty) ->
 	case recv(Socket, Transport, Until) of
 		{ok, Data} ->
-			luger:warning("cowboy_protocol", "parse_request: ~p", [<< Buffer/binary, Data/binary >>]),
+			luger:warning("cowboy_protocol", "parse_request buffer: ~p", [Buffer]),
+			luger:warning("cowboy_protocol", "parse_request data: ~p", [Data]),
 			parse_request(<< Buffer/binary, Data/binary >>, State, ReqEmpty);
 		{error, _} ->
 			terminate(State)
