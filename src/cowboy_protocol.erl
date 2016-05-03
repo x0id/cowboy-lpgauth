@@ -16,10 +16,10 @@
 -module(cowboy_protocol).
 
 %% API.
--export([start_link/4]).
+-export([start_link/5]).
 
 %% Internal.
--export([init/4]).
+-export([init/5]).
 -export([parse_request/3]).
 -export([resume/6]).
 
@@ -60,9 +60,9 @@
 
 %% API.
 
--spec start_link(ranch:ref(), inet:socket(), module(), opts()) -> {ok, pid()}.
-start_link(Ref, Socket, Transport, Opts) ->
-	Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
+-spec start_link(pid(), ranch:ref(), inet:socket(), module(), opts()) -> {ok, pid()}.
+start_link(AcceptorPid, Ref, LSocket, Transport, Opts) ->
+	Pid = spawn_link(?MODULE, init, [AcceptorPid, Ref, LSocket, Transport, Opts]),
 	{ok, Pid}.
 
 %% Internal.
@@ -74,29 +74,40 @@ get_value(Key, Opts, Default) ->
 		_ -> Default
 	end.
 
--spec init(ranch:ref(), inet:socket(), module(), opts()) -> ok.
-init(Ref, Socket, Transport, Opts) ->
-	Compress = get_value(compress, Opts, false),
-	MaxEmptyLines = get_value(max_empty_lines, Opts, 5),
-	MaxHeaderNameLength = get_value(max_header_name_length, Opts, 64),
-	MaxHeaderValueLength = get_value(max_header_value_length, Opts, 4096),
-	MaxHeaders = get_value(max_headers, Opts, 100),
-	MaxKeepalive = get_value(max_keepalive, Opts, 100),
-	MaxRequestLineLength = get_value(max_request_line_length, Opts, 4096),
-	Middlewares = get_value(middlewares, Opts, [cowboy_router, cowboy_handler]),
-	Env = [{listener, Ref}|get_value(env, Opts, [])],
-	OnRequest = get_value(onrequest, Opts, undefined),
-	OnResponse = get_value(onresponse, Opts, undefined),
-	Timeout = get_value(timeout, Opts, 5000),
-	ok = ranch:accept_ack(Ref),
-	wait_request(<<>>, #state{socket=Socket, transport=Transport,
-		middlewares=Middlewares, compress=Compress, env=Env,
-		max_empty_lines=MaxEmptyLines, max_keepalive=MaxKeepalive,
-		max_request_line_length=MaxRequestLineLength,
-		max_header_name_length=MaxHeaderNameLength,
-		max_header_value_length=MaxHeaderValueLength, max_headers=MaxHeaders,
-		onrequest=OnRequest, onresponse=OnResponse,
-		timeout=Timeout, until=until(Timeout)}, 0).
+-spec init(pid(), ranch:ref(), inet:socket(), module(), opts()) -> ok.
+init(AcceptorPid, Ref, LSocket, Transport, Opts) ->
+    _ = case Transport:accept(LSocket, infinity) of
+    	{ok, Socket} ->
+        	AcceptorPid ! accepted,
+        	Compress = get_value(compress, Opts, false),
+        	MaxEmptyLines = get_value(max_empty_lines, Opts, 5),
+        	MaxHeaderNameLength = get_value(max_header_name_length, Opts, 64),
+        	MaxHeaderValueLength = get_value(max_header_value_length, Opts, 4096),
+        	MaxHeaders = get_value(max_headers, Opts, 100),
+        	MaxKeepalive = get_value(max_keepalive, Opts, 100),
+        	MaxRequestLineLength = get_value(max_request_line_length, Opts, 4096),
+        	Middlewares = get_value(middlewares, Opts, [cowboy_router, cowboy_handler]),
+        	Env = [{listener, Ref}|get_value(env, Opts, [])],
+        	OnRequest = get_value(onrequest, Opts, undefined),
+        	OnResponse = get_value(onresponse, Opts, undefined),
+        	Timeout = get_value(timeout, Opts, 5000),
+        	wait_request(<<>>, #state{socket=Socket, transport=Transport,
+        		middlewares=Middlewares, compress=Compress, env=Env,
+        		max_empty_lines=MaxEmptyLines, max_keepalive=MaxKeepalive,
+        		max_request_line_length=MaxRequestLineLength,
+        		max_header_name_length=MaxHeaderNameLength,
+        		max_header_value_length=MaxHeaderValueLength, max_headers=MaxHeaders,
+        		onrequest=OnRequest, onresponse=OnResponse,
+        		timeout=Timeout, until=until(Timeout)}, 0);
+    	%% Reduce the accept rate if we run out of file descriptors.
+    	%% We can't accept anymore anyway, so we might as well wait
+    	%% a little for the situation to resolve itself.
+    	{error, emfile} ->
+    		receive after 100 -> ok end;
+    	%% We want to crash if the listening socket got closed.
+    	{error, Reason} when Reason =/= closed ->
+    		ok
+    end.
 
 -spec until(timeout()) -> non_neg_integer() | infinity.
 until(infinity) ->
