@@ -19,10 +19,6 @@
 -module(cowboy_websocket).
 -behaviour(cowboy_sub_protocol).
 
-%% Ignore the deprecation warning for crypto:sha/1.
-%% @todo Remove when we support only R16B+.
--compile(nowarn_deprecated_function).
-
 %% API.
 -export([upgrade/4]).
 
@@ -170,8 +166,7 @@ handler_init(State=#state{env=Env, transport=Transport,
 websocket_handshake(State=#state{
 			transport=Transport, key=Key, deflate_frame=DeflateFrame},
 		Req, HandlerState) ->
-	%% @todo Change into crypto:hash/2 for R17B+ or when supporting only R16B+.
-	Challenge = base64:encode(crypto:sha(
+	Challenge = base64:encode(crypto:hash(sha,
 		<< Key/binary, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" >>)),
 	Extensions = case DeflateFrame of
 		false -> [];
