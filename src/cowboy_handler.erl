@@ -83,8 +83,7 @@ handler_init(Req, State, Handler, HandlerOpts) ->
 			upgrade_protocol(Req, State, Handler, HandlerOpts, Module);
 		{upgrade, protocol, Module, Req2, HandlerOpts2} ->
 			upgrade_protocol(Req2, State, Handler, HandlerOpts2, Module)
-	catch Class:Reason ->
-		Stacktrace = erlang:get_stacktrace(),
+	catch Class:Reason:Stacktrace ->
 		cowboy_req:maybe_reply(Stacktrace, Req),
 		erlang:Class([
 			{reason, Reason},
@@ -112,8 +111,7 @@ handler_handle(Req, State, Handler, HandlerState) ->
 		{ok, Req2, HandlerState2} ->
 			terminate_request(Req2, State, Handler, HandlerState2,
 				{normal, shutdown})
-	catch Class:Reason ->
-		Stacktrace = erlang:get_stacktrace(),
+	catch Class:Reason:Stacktrace ->
 		cowboy_req:maybe_reply(Stacktrace, Req),
 		handler_terminate(Req, Handler, HandlerState, Reason),
 		erlang:Class([
@@ -231,8 +229,7 @@ handler_call(Req, State=#state{resp_sent=RespSent},
 		{loop, Req2, HandlerState2, hibernate} ->
 			handler_after_callback(Req2, State#state{hibernate=true},
 				Handler, HandlerState2)
-	catch Class:Reason ->
-		Stacktrace = erlang:get_stacktrace(),
+	catch Class:Reason:Stacktrace ->
 		if RespSent -> ok; true ->
 			cowboy_req:maybe_reply(Stacktrace, Req)
 		end,
@@ -283,11 +280,11 @@ terminate_request(Req, #state{env=Env, loop_timeout_ref=TRef},
 handler_terminate(Req, Handler, HandlerState, Reason) ->
 	try
 		Handler:terminate(Reason, cowboy_req:lock(Req), HandlerState)
-	catch Class:Reason2 ->
+	catch Class:Reason2:Stacktrace ->
 		erlang:Class([
 			{reason, Reason2},
 			{mfa, {Handler, terminate, 3}},
-			{stacktrace, erlang:get_stacktrace()},
+			{stacktrace, Stacktrace},
 			{req, cowboy_req:to_list(Req)},
 			{state, HandlerState},
 			{terminate_reason, Reason}
