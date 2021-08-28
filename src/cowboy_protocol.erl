@@ -88,7 +88,7 @@ init(Ref, Socket, Transport, Opts) ->
 	OnRequest = get_value(onrequest, Opts, undefined),
 	OnResponse = get_value(onresponse, Opts, undefined),
 	Timeout = get_value(timeout, Opts, 5000),
-	ok = ranch:accept_ack(Ref),
+
 	wait_request(<<>>, #state{socket=Socket, transport=Transport,
 		middlewares=Middlewares, compress=Compress, env=Env,
 		max_empty_lines=MaxEmptyLines, max_keepalive=MaxKeepalive,
