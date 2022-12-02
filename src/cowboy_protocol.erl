@@ -52,7 +52,7 @@
 	max_header_name_length :: non_neg_integer(),
 	max_header_value_length :: non_neg_integer(),
 	max_headers :: non_neg_integer(),
-	accept_ts :: erlang:timestamp(),
+	accept_ts :: erlang:timestamp() | undefined,
 	timeout :: timeout(),
 	until :: non_neg_integer() | infinity
 }).
@@ -414,7 +414,7 @@ request(Buffer, State=#state{socket=Socket, transport=Transport,
 			Req = cowboy_req:new(Socket, Transport, Peer, Method, Path,
 				Query, Version, add_ts(Headers, State), Host, Port, Buffer,
 				ReqKeepalive < MaxKeepalive, Compress, OnResponse),
-			onrequest(Req, State);
+			onrequest(Req, State#state{accept_ts = undefined});
 		{error, _} ->
 			%% Couldn't read the peer address; connection is gone.
 			terminate(State)
@@ -422,7 +422,9 @@ request(Buffer, State=#state{socket=Socket, transport=Transport,
 
 add_ts(Headers, #state{accept_ts = {Me, S, Mi}}) ->
 	Mics = (Me * 1_000_000 + S) * 1_000_000 + Mi,
-	[{<<"x-accept-mics">>, integer_to_binary(Mics)} | Headers].
+	[{<<"x-accept-mics">>, integer_to_binary(Mics)} | Headers];
+add_ts(Headers, _) ->
+    Headers.
 
 %% Call the global onrequest callback. The callback can send a reply,
 %% in which case we consider the request handled and move on to the next
