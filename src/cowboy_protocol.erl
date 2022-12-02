@@ -19,7 +19,7 @@
 -export([start_link/4]).
 
 %% Internal.
--export([init/4]).
+-export([init/5]).
 -export([parse_request/3]).
 -export([resume/6]).
 
@@ -52,6 +52,7 @@
 	max_header_name_length :: non_neg_integer(),
 	max_header_value_length :: non_neg_integer(),
 	max_headers :: non_neg_integer(),
+	accept_ts :: erlang:timestamp(),
 	timeout :: timeout(),
 	until :: non_neg_integer() | infinity
 }).
@@ -62,7 +63,8 @@
 
 -spec start_link(ranch:ref(), inet:socket(), module(), opts()) -> {ok, pid()}.
 start_link(Ref, Socket, Transport, Opts) ->
-	Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
+	AcceptTs = os:timestamp(),
+	Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts, AcceptTs]),
 	{ok, Pid}.
 
 %% Internal.
@@ -74,8 +76,9 @@ get_value(Key, Opts, Default) ->
 		_ -> Default
 	end.
 
--spec init(ranch:ref(), inet:socket(), module(), opts()) -> ok.
-init(Ref, Socket, Transport, Opts) ->
+-spec init(ranch:ref(), inet:socket(), module(), opts(), erlang:timestamp()) ->
+    ok.
+init(Ref, Socket, Transport, Opts, AcceptTs) ->
 	Compress = get_value(compress, Opts, false),
 	MaxEmptyLines = get_value(max_empty_lines, Opts, 5),
 	MaxHeaderNameLength = get_value(max_header_name_length, Opts, 64),
@@ -96,6 +99,7 @@ init(Ref, Socket, Transport, Opts) ->
 		max_header_name_length=MaxHeaderNameLength,
 		max_header_value_length=MaxHeaderValueLength, max_headers=MaxHeaders,
 		onrequest=OnRequest, onresponse=OnResponse,
+		accept_ts = AcceptTs,
 		timeout=Timeout, until=until(Timeout)}, 0).
 
 -spec until(timeout()) -> non_neg_integer() | infinity.
@@ -408,13 +412,17 @@ request(Buffer, State=#state{socket=Socket, transport=Transport,
 	case Transport:peername(Socket) of
 		{ok, Peer} ->
 			Req = cowboy_req:new(Socket, Transport, Peer, Method, Path,
-				Query, Version, Headers, Host, Port, Buffer,
+				Query, Version, add_ts(Headers, State), Host, Port, Buffer,
 				ReqKeepalive < MaxKeepalive, Compress, OnResponse),
 			onrequest(Req, State);
 		{error, _} ->
 			%% Couldn't read the peer address; connection is gone.
 			terminate(State)
 	end.
+
+add_ts(Headers, #state{accept_ts = {Me, S, Mi}}) ->
+	Mics = (Me * 1_000_000 + S) * 1_000_000 + Mi,
+	[{<<"x-accept-mics">>, integer_to_binary(Mics)} | Headers].
 
 %% Call the global onrequest callback. The callback can send a reply,
 %% in which case we consider the request handled and move on to the next
