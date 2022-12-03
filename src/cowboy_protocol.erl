@@ -19,7 +19,7 @@
 -export([start_link/4]).
 
 %% Internal.
--export([init/5]).
+-export([init/4]).
 -export([parse_request/3]).
 -export([resume/6]).
 
@@ -52,7 +52,7 @@
 	max_header_name_length :: non_neg_integer(),
 	max_header_value_length :: non_neg_integer(),
 	max_headers :: non_neg_integer(),
-	accept_ts :: erlang:timestamp() | undefined,
+	ts_list :: [erlang:timestamp()],
 	timeout :: timeout(),
 	until :: non_neg_integer() | infinity
 }).
@@ -63,8 +63,7 @@
 
 -spec start_link(ranch:ref(), inet:socket(), module(), opts()) -> {ok, pid()}.
 start_link(Ref, Socket, Transport, Opts) ->
-	AcceptTs = os:timestamp(),
-	Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts, AcceptTs]),
+	Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
 	{ok, Pid}.
 
 %% Internal.
@@ -76,9 +75,8 @@ get_value(Key, Opts, Default) ->
 		_ -> Default
 	end.
 
--spec init(ranch:ref(), inet:socket(), module(), opts(), erlang:timestamp()) ->
-    ok.
-init(Ref, Socket, Transport, Opts, AcceptTs) ->
+-spec init(ranch:ref(), inet:socket(), module(), opts()) -> ok.
+init(Ref, Socket, Transport, Opts) ->
 	Compress = get_value(compress, Opts, false),
 	MaxEmptyLines = get_value(max_empty_lines, Opts, 5),
 	MaxHeaderNameLength = get_value(max_header_name_length, Opts, 64),
@@ -99,7 +97,7 @@ init(Ref, Socket, Transport, Opts, AcceptTs) ->
 		max_header_name_length=MaxHeaderNameLength,
 		max_header_value_length=MaxHeaderValueLength, max_headers=MaxHeaders,
 		onrequest=OnRequest, onresponse=OnResponse,
-		accept_ts = AcceptTs,
+		ts_list = [],
 		timeout=Timeout, until=until(Timeout)}, 0).
 
 -spec until(timeout()) -> non_neg_integer() | infinity.
@@ -147,7 +145,7 @@ parse_request(<< $\n, _/binary >>, State, _) ->
 %% We limit the length of the Request-line to MaxLength to avoid endlessly
 %% reading from the socket and eventually crashing.
 parse_request(Buffer, State=#state{max_request_line_length=MaxLength,
-		max_empty_lines=MaxEmpty}, ReqEmpty) ->
+		max_empty_lines=MaxEmpty, ts_list = L}, ReqEmpty) ->
 	case match_eol(Buffer, 0) of
 		nomatch when byte_size(Buffer) > MaxLength ->
 			error_terminate(414, State);
@@ -159,7 +157,8 @@ parse_request(Buffer, State=#state{max_request_line_length=MaxLength,
 			<< _:16, Rest/binary >> = Buffer,
 			parse_request(Rest, State, ReqEmpty + 1);
 		_ ->
-			parse_method(Buffer, State, <<>>)
+			State_ = State#state{ts_list = [os:timestamp() | L]},
+			parse_method(Buffer, State_, <<>>)
 	end.
 
 match_eol(<< $\n, _/bits >>, N) ->
@@ -412,18 +411,21 @@ request(Buffer, State=#state{socket=Socket, transport=Transport,
 	case Transport:peername(Socket) of
 		{ok, Peer} ->
 			Req = cowboy_req:new(Socket, Transport, Peer, Method, Path,
-				Query, Version, add_ts(Headers, State), Host, Port, Buffer,
+				Query, Version, set_ts(Headers, State), Host, Port, Buffer,
 				ReqKeepalive < MaxKeepalive, Compress, OnResponse),
-			onrequest(Req, State#state{accept_ts = undefined});
+			onrequest(Req, State);
 		{error, _} ->
 			%% Couldn't read the peer address; connection is gone.
 			terminate(State)
 	end.
 
-add_ts(Headers, #state{accept_ts = {Me, S, Mi}}) ->
+set_ts(Headers, #state{ts_list = [{Me, S, Mi}]}) ->
 	Mics = (Me * 1_000_000 + S) * 1_000_000 + Mi,
 	[{<<"x-accept-mics">>, integer_to_binary(Mics)} | Headers];
-add_ts(Headers, _) ->
+set_ts(Headers, #state{ts_list = [{Me, S, Mi} | _]}) ->
+	Mics = (Me * 1_000_000 + S) * 1_000_000 + Mi,
+	[{<<"x-recv-mics">>, integer_to_binary(Mics)} | Headers];
+set_ts(Headers, _) ->
     Headers.
 
 %% Call the global onrequest callback. The callback can send a reply,
@@ -515,6 +517,16 @@ error_terminate(Status, Req, State) ->
 	terminate(State).
 
 -spec terminate(#state{}) -> ok.
-terminate(#state{socket=Socket, transport=Transport}) ->
+terminate(#state{socket=Socket, transport=Transport, ts_list = L}) ->
 	Transport:close(Socket),
+    case persistent_term:get(cowboy_trace, false) of
+        true ->
+            persistent_term:put(cowboy_trace, false),
+            file:write_file(
+                lists:concat(["/tmp/cowboy_trace_", rand:uniform(1000)]),
+                term_to_binary(L)
+            );
+        _ ->
+            ok
+    end,
 	ok.
