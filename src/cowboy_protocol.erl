@@ -19,7 +19,7 @@
 -export([start_link/4]).
 
 %% Internal.
--export([init/4]).
+-export([init/5]).
 -export([parse_request/3]).
 -export([resume/6]).
 
@@ -37,6 +37,8 @@
 	| {timeout, timeout()}].
 -export_type([opts/0]).
 
+-type ts() :: erlang:timestamp().
+
 -record(state, {
 	socket :: inet:socket(),
 	transport :: module(),
@@ -52,7 +54,8 @@
 	max_header_name_length :: non_neg_integer(),
 	max_header_value_length :: non_neg_integer(),
 	max_headers :: non_neg_integer(),
-	ts_list :: [erlang:timestamp()],
+	start_ts :: ts(),
+	ts_list :: [ts()],
 	timeout :: timeout(),
 	until :: non_neg_integer() | infinity
 }).
@@ -63,7 +66,8 @@
 
 -spec start_link(ranch:ref(), inet:socket(), module(), opts()) -> {ok, pid()}.
 start_link(Ref, Socket, Transport, Opts) ->
-	Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
+	StartTs = os:timestamp(),
+	Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts, StartTs]),
 	{ok, Pid}.
 
 %% Internal.
@@ -75,8 +79,8 @@ get_value(Key, Opts, Default) ->
 		_ -> Default
 	end.
 
--spec init(ranch:ref(), inet:socket(), module(), opts()) -> ok.
-init(Ref, Socket, Transport, Opts) ->
+-spec init(ranch:ref(), inet:socket(), module(), opts(), ts()) -> ok.
+init(Ref, Socket, Transport, Opts, StartTs) ->
 	Compress = get_value(compress, Opts, false),
 	MaxEmptyLines = get_value(max_empty_lines, Opts, 5),
 	MaxHeaderNameLength = get_value(max_header_name_length, Opts, 64),
@@ -97,6 +101,7 @@ init(Ref, Socket, Transport, Opts) ->
 		max_header_name_length=MaxHeaderNameLength,
 		max_header_value_length=MaxHeaderValueLength, max_headers=MaxHeaders,
 		onrequest=OnRequest, onresponse=OnResponse,
+		start_ts = StartTs,
 		ts_list = [],
 		timeout=Timeout, until=until(Timeout)}, 0).
 
@@ -419,9 +424,11 @@ request(Buffer, State=#state{socket=Socket, transport=Transport,
 			terminate(State)
 	end.
 
-set_ts(Headers, #state{ts_list = [{Me, S, Mi}]}) ->
-	Mics = (Me * 1_000_000 + S) * 1_000_000 + Mi,
-	[{<<"x-accept-mics">>, integer_to_binary(Mics)} | Headers];
+set_ts(Headers, #state{start_ts = {M1, S1, U1}, ts_list = [{M2, S2, U2}]}) ->
+	StartMics  = (M1 * 1_000_000 + S1) * 1_000_000 + U1,
+	AcceptMics = (M2 * 1_000_000 + S2) * 1_000_000 + U2,
+	[{<<"x-init-mics">>, integer_to_binary(StartMics)},
+	 {<<"x-accept-mics">>, integer_to_binary(AcceptMics)} | Headers];
 set_ts(Headers, #state{ts_list = [{Me, S, Mi} | _]}) ->
 	Mics = (Me * 1_000_000 + S) * 1_000_000 + Mi,
 	[{<<"x-recv-mics">>, integer_to_binary(Mics)} | Headers];
